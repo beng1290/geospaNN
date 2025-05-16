@@ -517,7 +517,9 @@ def linear_gls(
     )
 
     def mlp_brisc(xa):
-        return beta[0] + torch.Tensor(beta[1:]) * xa
+        if not isinstance(xa, torch.Tensor):
+            xa = torch.tensor(xa)
+        return beta[0] + xa @ torch.tensor(beta[1:])
 
     model = NNGLS(
         p=x_in.shape[1],
