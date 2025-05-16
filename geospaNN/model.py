@@ -85,7 +85,7 @@ class InverseCovMat(torch.nn.Module):
     """
 
     def __init__(self, neighbor_size, coord_dimension, theta):
-        super(InverseCovMat, self).__init__()
+        super().__init__()
         self.neighbor_size = neighbor_size
         self.coord_dimension = coord_dimension
         self.theta = theta
@@ -103,23 +103,8 @@ class InverseCovMat(torch.nn.Module):
         dists = torch.sqrt(
             torch.sum((neighbor_positions1 - neighbor_positions2) ** 2, axis=-1)
         )
-        cov = make_cov_full(
-            dists, self.theta, nuggets=True
-        )  # have to add nuggets (resolved)
-        # cov_final = self.theta[0] * torch.eye(self.neighbor_size).repeat(
-        #    batch_size, 1, 1
-        # )
-        # for i in range(batch_size):
-        #    cov_final[
-        #        i,
-        #        edge_list[i].reshape(1, -1, 1),
-        #        edge_list[i].reshape(1, 1, -1),
-        #    ] = cov[
-        #        i,
-        #        edge_list[i].reshape(1, -1, 1),
-        #        edge_list[i].reshape(1, 1, -1),
-        #    ]
-        # inv_cov_final = torch.linalg.inv(cov_final)
+        # have to add nuggets (resolved)
+        cov = make_cov_full(dists, self.theta, nuggets=True)
         # pylint: disable=not-callable
         inv_cov_final = torch.linalg.inv(cov)
         return inv_cov_final
@@ -293,7 +278,7 @@ class NNGLS(torch.nn.Module):
         mlp: torch.nn.Module,
         theta: tuple[float, float, float],
     ):
-        super(NNGLS, self).__init__()
+        super().__init__()
         self.p = p
         self.neighbor_size = neighbor_size
         self.coord_dimensions = coord_dimensions
@@ -515,25 +500,35 @@ def linear_gls(
     beta, theta_hat = BRISC_estimation(
         coords, y, x, n_neighbors=neighbor_size, **kwargs
     )
-
-    def mlp_brisc(xa):
-        if not isinstance(xa, torch.Tensor):
-            xa = torch.tensor(xa)
-        return beta[0] + xa @ torch.tensor(beta[1:])
-
+    #
     model = NNGLS(
         p=x_in.shape[1],
         neighbor_size=neighbor_size,
         coord_dimensions=2,
-        mlp=mlp_brisc,
+        mlp=None,
         theta=torch.tensor(theta_hat),
     )
+    #
     cov = make_cov(torch.tensor(coords), theta_hat, neighbor_size=neighbor_size)
     z = cov.decorrelate(x)
     model.beta = beta
     # pylint: disable=not-callable
     pseudo_inv = torch.linalg.pinv(z.T @ z)
-    model.var = 0.5 * (pseudo_inv + pseudo_inv.T)
+    var = 0.5 * (pseudo_inv + pseudo_inv.T)
+    model.var = var
+
+    def mlp_brisc(xa):
+        #
+        if not isinstance(xa, torch.Tensor):
+            xa = torch.tensor(xa)
+        #
+        xa = torch.concat([torch.ones(x.shape[0], 1), x], axis=1)
+        #
+        return beta[0] + xa @ torch.tensor(beta[1:]) + var
+
+    #
+    model.mlp = mlp_brisc
+    #
     return model
 
 
