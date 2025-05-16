@@ -1,0 +1,30 @@
+{
+    "pylint.args": [
+        "--rcfile=${workspaceFolder}/.pylintrc"
+    ],
+    "pylint.importStrategy": "fromEnvironment",
+    "flake8.args": [
+        "--config=${workspaceFolder}/.flake8"
+    ],
+    "black-formatter.importStrategy": "fromEnvironment",
+    "editor.tokenColorCustomizations": {
+        "textMateRules": [
+            {
+                "scope": "string.quoted.docstring.multi.python",
+                "settings": {
+                    "foreground": "#5C9148" // Change this to your preferred colour for docstrings and block comments
+                }
+            }
+        ],
+        "comments": "#5C9148" // Change this to your preferred colour for single-line comments
+    },
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "editor.formatOnSave": true,
+    "autoDocstring.docstringFormat": "google",
+    "autoDocstring.startOnNewLine": true,
+    "autoDocstring.guessTypes": true,
+    "autoDocstring.quoteStyle": "\"\"\"",
+    "autoDocstring.customTemplatePath": ".mustache"
+}

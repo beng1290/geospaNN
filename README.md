@@ -162,7 +162,7 @@ Next, simulate and split the data.
 ```commandline\
 # 1.
 torch.manual_seed(2024)
-X, Y, coord, cov, corerr = geospaNN.Simulation(n, p, nn, funXY, theta, range=[0, 10])
+X, Y, coord, cov, corerr = geospaNN.simulation(n, p, nn, funXY, theta, simul_range=[0, 10])
 
 # 2.
 X, Y, coord, _ = geospaNN.spatial_order(X, Y, coord, method = 'max-min')
@@ -193,10 +193,10 @@ mlp = torch.nn.Sequential(
 )
 
 # 2.
-model = geospaNN.nngls(p=p, neighbor_size=nn, coord_dimensions=2, mlp=mlp, theta=torch.tensor([1.5, 5, 0.1]))
+model = geospaNN.NNGLS(p=p, neighbor_size=nn, coord_dimensions=2, mlp=mlp, theta=torch.tensor([1.5, 5, 0.1]))
 
 # 3.
-nngls_model = geospaNN.nngls_train(model, lr =  0.01, min_delta = 0.001)
+nngls_model = geospaNN.NNGLSTrain(model, lr =  0.01, min_delta = 0.001)
 
 # 4.
 training_log = nngls_model.train(data_train, data_val, data_test,

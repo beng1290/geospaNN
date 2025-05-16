@@ -27,7 +27,10 @@ classifiers = [
 ]
 
 dependencies = [
-    'numpy', 'scipy', 'scikit-learn', 'rpy2',
+    'numpy',
+    'scipy',
+    'scikit-learn',
+    'rpy2',
     'torch>=2.0.0',
     'torch_sparse>=0.6.18',
     'torch_scatter>=2.1.2',
@@ -36,7 +39,29 @@ dependencies = [
     'seaborn'
 ]
 
+jupyter = [
+    "ipykernel",
+    "ipython>=8.6.0",
+    "jupyter",
+]
+
+test = [
+    "black",
+    "flake8",
+    "pylint",
+    "pytest",
+    "pylint-pytest",
+    "pytest-datafiles",
+    "pre-commit",
+]
+
+[tool.black]
+line-length = 80
+
 [project.urls]
 Homepage = "https://wentaozhan1998.github.io/geospaNN-doc"
 Repository = "https://github.com/WentaoZhan1998/geospaNN"
 Issues = "https://github.com/WentaoZhan1998/geospaNN/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true
