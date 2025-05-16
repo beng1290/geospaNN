@@ -14,3 +14,20 @@ demo_code/randomForestsGLS_demo.nb.html
 # vignette
 /vignette/*
 !/vignette/vignette.pdf
+
+# knitr and R markdown default cache directories
+*_cache/
+/cache/
+
+# R Environment Variables
+.Renviron
+
+# RStudio Connect folder
+rsconnect/
+.Rproj.user
+.Rproj
+
+# python
+*.pyc
+.ipynb_checkpoints
+_version.py
