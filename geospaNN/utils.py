@@ -550,7 +550,9 @@ def krig_pred(
     rank = make_rank(coord_train, neighbor_size, coord_test)
 
     w_test = torch.zeros(n_test)
+    #
     sigma_test = (sigma_sq + tau_sq) * torch.ones(n_test)
+    #
     for i in range(n_test):
         ind = rank[i, :]
         cov_sub = make_cov_full(
@@ -565,7 +567,9 @@ def krig_pred(
         ).reshape(-1)
         #
         bi = torch.linalg.solve(cov_sub, cov_vec)
+        #
         w_test[i] = torch.dot(bi.T, w_train[ind]).squeeze()
+        #
         sigma_test[i] = sigma_test[i] - torch.dot(bi.reshape(-1), cov_vec)
     p = scipy.stats.norm.ppf((1 + q) / 2, loc=0, scale=1)
     sigma_test = torch.sqrt(sigma_test)
@@ -787,13 +791,10 @@ def make_cov(
     """
     if not use_nngp:
         dist = distance(coord, coord)
-        cov = make_cov_full(
-            dist, theta, nuggets=True
-        )  # ### could add a make_bf from cov (resolved)
+        cov = make_cov_full(dist, theta, nuggets=True)
         return cov
-    i_b, f_diag = make_bf(
-        coord, theta, neighbor_size
-    )  # ### could merge into one step
+    # ### could merge into one step
+    i_b, f_diag = make_bf(coord, theta, neighbor_size)
     cov = NNGPCov(i_b.b, f_diag, i_b.ind_list)
     return cov
 

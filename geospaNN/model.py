@@ -2,7 +2,7 @@
 model module
 """
 
-from typing import Optional
+from typing import Optional, Union
 import warnings
 
 import numpy as np
@@ -456,10 +456,11 @@ class NNGLS(torch.nn.Module):
 
 
 def linear_gls(
-    data: torch_geometric.data.Data,
-    y=None,
-    x=None,
+    data: Optional[Union[np.ndarray, torch_geometric.data.Data]],
+    y: Optional[np.ndarray] = None,
+    x: Optional[np.ndarray] = None,
     neighbor_size: Optional[int] = 20,
+    get_model_cov: Optional[bool] = True,
     **kwargs,
 ) -> NNGLS:
     """Spatial linear mixed model for geospatial data
@@ -473,11 +474,21 @@ def linear_gls(
 
     Parameters:
         data_train:
-                Training data containing x, y and spatial coordinates, can be
-                the output of split_data() or make_graph().
+            Training data containing x, y and spatial coordinates, can be
+            the output of split_data() or make_graph().
+        y:
+            Optionally provide spatial coordinates to data, response variable
+            to y, and covariates to x.
+        x:
+            see y.
         neighbor_size:
-                Number of nearest neighbors used for NNGP approximation,
-                default value is 20.
+            Number of nearest neighbors used for NNGP approximation,
+            default value is 20.
+        get_model_cov:
+            A boolean value indicating whether to compute the covariance
+            matrix of the linear coefficients. Default is True.
+        **kwargs:
+            Additional arguments passed to BRISC_estimation().
 
     Returns:
         model: NNGLS
@@ -497,25 +508,10 @@ def linear_gls(
         x_in = x
     #
     x = np.concatenate([np.ones(x_in.shape[0])[:, np.newaxis], x_in], axis=1)
+    #
     beta, theta_hat = BRISC_estimation(
         coords, y, x, n_neighbors=neighbor_size, **kwargs
     )
-    #
-    model = NNGLS(
-        p=x_in.shape[1],
-        neighbor_size=neighbor_size,
-        coord_dimensions=2,
-        mlp=None,
-        theta=torch.tensor(theta_hat),
-    )
-    #
-    cov = make_cov(torch.tensor(coords), theta_hat, neighbor_size=neighbor_size)
-    z = cov.decorrelate(x)
-    model.beta = beta
-    # pylint: disable=not-callable
-    pseudo_inv = torch.linalg.pinv(z.T @ z)
-    var = 0.5 * (pseudo_inv + pseudo_inv.T)
-    model.var = var
 
     def mlp_brisc(xa):
         #
@@ -524,10 +520,26 @@ def linear_gls(
         #
         xa = torch.concat([torch.ones(x.shape[0], 1), x], axis=1)
         #
-        return beta[0] + xa @ torch.tensor(beta[1:]) + var
+        return beta[0] + xa @ torch.tensor(beta[1:])
 
+    model = NNGLS(
+        p=x_in.shape[1],
+        neighbor_size=neighbor_size,
+        coord_dimensions=2,
+        mlp=mlp_brisc,
+        theta=torch.tensor(theta_hat),
+    )
     #
-    model.mlp = mlp_brisc
+    model.beta = beta
+    #
+    if get_model_cov:
+        cov = make_cov(
+            torch.tensor(coords), theta_hat, neighbor_size=neighbor_size
+        )
+        z = cov.decorrelate(x)
+        # pylint: disable=not-callable
+        pseudo_inv = torch.linalg.pinv(z.T @ z)
+        model.var = 0.5 * (pseudo_inv + pseudo_inv.T)
     #
     return model
 

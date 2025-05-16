@@ -100,9 +100,7 @@ def BRISC_estimation(coords, y, x=None, **kwargs):
     #
     beta = np.array(res["Beta"])
     theta_hat = np.array(res["Theta"])
-    phi = theta_hat[2]
-    tau_sq = theta_hat[1]
-    sigma_sq = theta_hat[0]
+    sigma_sq, tau_sq, phi = theta_hat
     theta_hat[1] = phi
     theta_hat[2] = max(tau_sq / sigma_sq, 1e-03)
 
