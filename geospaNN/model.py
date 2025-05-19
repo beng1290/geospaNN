@@ -90,7 +90,8 @@ class InverseCovMat(torch.nn.Module):
         self.coord_dimension = coord_dimension
         self.theta = theta
 
-    def forward(self, neighbor_positions):  # , edge_list):
+    # pylint: disable=unused-argument
+    def forward(self, neighbor_positions, edge_list):
         """
         Forward step with spatially decorrelated output.
         """
@@ -373,6 +374,7 @@ class NNGLS(torch.nn.Module):
         Returns:
             estimation
         """
+        xa = xa[:, None] if xa.ndim == 1 else xa
         assert xa.shape[1] == self.p
         with torch.no_grad():
             return self.mlp(xa).squeeze()
@@ -455,6 +457,19 @@ class NNGLS(torch.nn.Module):
             return estimation_test + w_test
 
 
+def get_linear_gls_cov(model, coords, x):
+    """
+    get the linear model covariance matrix
+    """
+    cov = make_cov(
+        torch.tensor(coords), model.theta, neighbor_size=model.neighbor_size
+    )
+    z = cov.decorrelate(x)
+    # pylint: disable=not-callable
+    pseudo_inv = torch.linalg.pinv(z.T @ z)
+    return 0.5 * (pseudo_inv + pseudo_inv.T)
+
+
 def linear_gls(
     data: Optional[Union[np.ndarray, torch_geometric.data.Data]],
     y: Optional[np.ndarray] = None,
@@ -507,6 +522,7 @@ def linear_gls(
         coords = data
         x_in = x
     #
+    x_in = x_in[:, None] if x_in.ndim == 1 else x_in
     x = np.concatenate([np.ones(x_in.shape[0])[:, np.newaxis], x_in], axis=1)
     #
     beta, theta_hat = BRISC_estimation(
@@ -517,8 +533,6 @@ def linear_gls(
         #
         if not isinstance(xa, torch.Tensor):
             xa = torch.tensor(xa)
-        #
-        xa = torch.concat([torch.ones(x.shape[0], 1), x], axis=1)
         #
         return beta[0] + xa @ torch.tensor(beta[1:])
 
@@ -533,13 +547,7 @@ def linear_gls(
     model.beta = beta
     #
     if get_model_cov:
-        cov = make_cov(
-            torch.tensor(coords), theta_hat, neighbor_size=neighbor_size
-        )
-        z = cov.decorrelate(x)
-        # pylint: disable=not-callable
-        pseudo_inv = torch.linalg.pinv(z.T @ z)
-        model.var = 0.5 * (pseudo_inv + pseudo_inv.T)
+        model.var = get_linear_gls_cov(model, coords, x)
     #
     return model
 

@@ -116,7 +116,6 @@ class NNTrain:
         for epoch in range(epoch_num):
             # Train for one epoch
             self.model.train()
-
             for batch in train_loader:
                 self.optimizer.zero_grad()
                 est = self.model(batch.x).squeeze()
@@ -187,10 +186,12 @@ class NNGLSTrain:
         patience: Optional[int] = 10,
         patience_cut_lr: Optional[int] = None,
         min_delta: float = 0.001,
+        **brisc_kwargs,
     ):
         if patience_cut_lr is None:
             patience_cut_lr = int(patience / 2)
         self.model = model
+        self.brisc_kwargs = brisc_kwargs
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
         self.lr_scheduler = LRScheduler(
             self.optimizer, patience=patience_cut_lr, factor=0.5
@@ -222,13 +223,14 @@ class NNGLSTrain:
             data.pos,
             self.model.theta,
             self.model.neighbor_size,
+            ordering=data.ordering,
+            neighbor=data.neighbor,
+            **self.brisc_kwargs,
         )
 
         state_dict = self.model.state_dict()
         state_dict["theta"] = torch.from_numpy(theta_new)
         self.model.load_state_dict(state_dict)
-        print("to")
-        print(theta_new)
 
     def train(
         self,

@@ -4,6 +4,7 @@ geospaNN: A Python package for geospatial deep learning
 recommend keeping namespaces separate...
 """
 
+from . import r_utils
 from .utils import (
     DropoutLayer,
     EarlyStopping,
@@ -29,7 +30,6 @@ from .utils import (
     edit_batch,
     theta_update,
 )
-from . import r_utils
 from .model import NNGLS, linear_gls
 from .main import NNTrain, NNGLSTrain
 from .visualize import spatial_plot_surface, plot_pdp, plot_pdp_list, plot_log

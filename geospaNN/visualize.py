@@ -19,8 +19,8 @@ from .model import NNGLS
 
 
 def spatial_plot_surface(
-    variable: np.array,
-    coord: np.array,
+    variable: np.ndarray,
+    coord: np.ndarray,
     title: Optional[str] = "Variable",
     save_path: Optional[str] = "./",
     file_name: Optional[str] = "spatial_surface.png",

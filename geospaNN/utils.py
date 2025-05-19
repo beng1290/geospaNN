@@ -7,7 +7,7 @@ utils module for geospaNN
 import math
 import warnings
 import random
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -18,7 +18,7 @@ import torch_geometric
 from torch_geometric.loader import NeighborLoader
 
 
-from .r_utils import BRISC_estimation
+from .r_utils import BRISC_estimation, BRISC_neighbor
 
 
 class DropoutLayer(torch.nn.Module):
@@ -170,10 +170,12 @@ class SparseB:
             of the nxn diagonal matrix f.
 
         to_dense():
-            Return the dense form of b_dense as an np.array object.
+            Return the dense form of b_dense as an np.ndarray object.
     """
 
-    def __init__(self, b: torch.Tensor | np.array, ind_list: np.array):
+    def __init__(
+        self, b: Union[torch.Tensor, np.ndarray], ind_list: np.ndarray
+    ):
         self.b = b
         self.n = b.shape[0]
         self.neighbor_size = b.shape[1]
@@ -418,7 +420,7 @@ def coord_basis(coord, num_basis: Optional[list] = None):
         theta_temp = 1 / np.sqrt(basis) * 2.5
         knots_s1, knots_s2 = np.meshgrid(knots_1d[res], knots_1d[res])
         knots = np.column_stack((knots_s1.flatten(), knots_s2.flatten()))
-        for i, _ in enumerate(basis):
+        for i in range(basis):
             d = np.linalg.norm(coord_np - knots[i, :], axis=1) / theta_temp
             for j, d_j in enumerate(d):
                 if d_j >= 0 and d_j <= 1:
@@ -448,24 +450,18 @@ def distance(coord1: torch.Tensor, coord2: torch.Tensor) -> torch.Tensor:
             The distance matrix.
     """
     if coord1.ndim == 1:
-        # m = 1
         coord1 = coord1.unsqueeze(0)
-    # else:
-    # m = coord1.shape[0]
     if coord2.ndim == 1:
-        # n = 1
         coord2 = coord2.unsqueeze(0)
-    # else:
-    # n = coord2.shape[0]
 
     # ### Can improve (resolved)
     coord1 = coord1.unsqueeze(0)
     coord2 = coord2.unsqueeze(1)
-    dists = torch.sqrt(torch.sum((coord1 - coord2) ** 2, axis=-1))
+    dists = torch.norm(coord1 - coord2, dim=-1)
     return dists
 
 
-def distance_np(coord1: np.array, coord2: np.array) -> np.array:
+def distance_np(coord1: np.ndarray, coord2: np.ndarray) -> np.ndarray:
     """The numpy version of distance()
 
     Calculate the pairwise distance between two sets of locations.
@@ -483,15 +479,7 @@ def distance_np(coord1: np.array, coord2: np.array) -> np.array:
     See Also:
         distance : Distance matrix between two sets of points
     """
-    m = coord1.shape[0]
-    n = coord2.shape[0]
-    # ### Can improve (resolved)
-    # coord1 = coord1
-    # coord2 = coord2
-    dists = np.zeros((m, n))
-    for i in range(m):
-        dists[i, :] = np.sqrt(np.sum((coord1[i] - coord2) ** 2, axis=1))
-    return dists
+    return np.linalg.norm(coord1[:, None, :] - coord2[None, :, :], axis=-1)
 
 
 def krig_pred(
@@ -567,10 +555,9 @@ def krig_pred(
         ).reshape(-1)
         #
         bi = torch.linalg.solve(cov_sub, cov_vec)
-        #
         w_test[i] = torch.dot(bi.T, w_train[ind]).squeeze()
-        #
         sigma_test[i] = sigma_test[i] - torch.dot(bi.reshape(-1), cov_vec)
+    #
     p = scipy.stats.norm.ppf((1 + q) / 2, loc=0, scale=1)
     sigma_test = torch.sqrt(sigma_test)
     pred_u = w_test + p * sigma_test
@@ -709,10 +696,10 @@ def make_bf_from_cov(
 
 
 def make_cov_full(
-    dist: torch.Tensor | np.ndarray,
+    dist: Union[torch.Tensor, np.ndarray],
     theta: tuple[float, float, float],
     nuggets: Optional[bool] = False,
-) -> torch.Tensor | np.ndarray:
+) -> Union[torch.Tensor, np.ndarray]:
     """
     Compose covariance matrix from the distance matrix with dense
     representation.
@@ -790,13 +777,10 @@ def make_cov(
         statistics." arXiv preprint arXiv:2102.13299 (2021).
     """
     if not use_nngp:
-        dist = distance(coord, coord)
-        cov = make_cov_full(dist, theta, nuggets=True)
-        return cov
+        return make_cov_full(distance(coord, coord), theta, nuggets=True)
     # ### could merge into one step
     i_b, f_diag = make_bf(coord, theta, neighbor_size)
-    cov = NNGPCov(i_b.b, f_diag, i_b.ind_list)
-    return cov
+    return NNGPCov(i_b.b, f_diag, i_b.ind_list)
 
 
 def make_graph(
@@ -863,8 +847,17 @@ def make_graph(
     edge_attr = torch.tensor(neighbor_idc).reshape(
         -1, 1
     )  # denotes the index of the neighbor
+    #
+    ordering, neighbor = BRISC_neighbor(coord, nn=neighbor_size)
+    #
     data = torch_geometric.data.Data(
-        x=x, y=y, pos=coord, edge_index=edge_index, edge_attr=edge_attr
+        x=x.float(),
+        y=y.float(),
+        pos=coord.float(),
+        edge_index=edge_index,
+        edge_attr=edge_attr,
+        ordering=ordering,
+        neighbor=neighbor,
     )
     assert data.validate(raise_on_error=True)
     return data
@@ -903,14 +896,14 @@ def make_rank(
         coord_ref = coord
         rank = knn.kneighbors(coord_ref)[1]
         return rank[:, 1:]
-    else:
-        rank = knn.kneighbors(coord_ref)[1]
-        return rank[:, 0:]
+    #
+    rank = knn.kneighbors(coord_ref)[1]
+    return rank[:, 0:]
 
 
 def rmvn(
     mu: torch.Tensor,
-    cov: torch.Tensor | NNGPCov,
+    cov: Union[torch.Tensor, NNGPCov],
     sparse: Optional[bool] = True,
 ) -> torch.Tensor:
     """Randomly generate sample from multivariate normal distribution
@@ -971,7 +964,7 @@ def simulation(
     torch.Tensor,
     torch.Tensor,
     torch.Tensor,
-    torch.Tensor | NNGPCov,
+    Union[torch.Tensor, NNGPCov],
     torch.Tensor,
 ]:
     """Simulate spatial data
@@ -1185,7 +1178,7 @@ def split_data(
 
 def split_loader(
     data: torch_geometric.data.Data, batch_size: Optional[int] = None
-) -> torch.DataLoaders:
+) -> NeighborLoader:
     """Create mini-batches for GNN training
 
     This functions further split a data for mini-batch training of GNNs on
@@ -1250,7 +1243,8 @@ def theta_update(
     neighbor_size: Optional[int] = 20,
     use_brisc: Optional[bool] = True,
     min_tau: Optional[float] = 0.001,
-) -> np.array:
+    **kwargs,
+) -> np.ndarray:
     """Update the spatial parameters using maximum likelihood.
 
     This function updates the spatial parameters by assuming the observations
@@ -1283,6 +1277,8 @@ def theta_update(
         min_tau:
             A minimum value of tau to avoid sinularity issue in matrix
             inversion. Default being 0.001.
+        **kwargs:
+            Additional arguments passed to BRISC_estimation().
 
     Returns:
         theta_updated:
@@ -1300,26 +1296,38 @@ def theta_update(
         Saha, Arkajyoti, and Abhirup Datta. "BRISC: bootstrap for rapid
         inference on spatial covariances." Stat 7.1 (2018): e184.
     """
-    warnings.filterwarnings("ignore")
-    w = w.detach().numpy()
-    coord = coord.detach().numpy()
-
-    if use_brisc:
-        _, theta = BRISC_estimation(coord, w)
-        theta[2] = max(theta[2], min_tau)
-        print("Theta estimated as")
-        print(theta)
-        return theta
-
-    theta = theta0.detach().numpy()
+    if isinstance(w, torch.Tensor):
+        w = w.detach().numpy()
+    if isinstance(coord, torch.Tensor):
+        coord = coord.detach().numpy()
     #
     if theta0 is None:
-        warnings.warn("Theta not initialized, start from [1,1,1].")
-        theta = np.array([1, 1, 1])
+        theta = np.array([1, 1, np.sqrt(0.1)])
     else:
-        print("Theta updated from")
-        print(theta)
+        theta = theta0.detach().numpy()
     #
+    print("Theta updated from", theta)
+    #
+    if use_brisc:
+        #
+        theta_params = {
+            "sigma.sq": theta[0],
+            "phi": theta[1],
+            "tau.sq": theta[2] ** 2,
+        }
+        # should check any of these are passed separate to kwargs
+        #
+        _, theta = BRISC_estimation(
+            coord,
+            w,
+            n_neighbors=neighbor_size,
+            min_tau=min_tau,
+            **theta_params,
+            **kwargs,
+        )
+        print("Theta estimated as", theta)
+        return theta
+
     n_train = w.shape[0]
     rank = make_rank(coord, neighbor_size)
     #
